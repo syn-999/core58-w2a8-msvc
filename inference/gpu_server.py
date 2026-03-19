@@ -36,9 +36,12 @@ DEVICE = os.getenv("BITNET_DEVICE", "cuda:0")
 DECODE_BACKEND = os.getenv("BITNET_DECODE_BACKEND", "int2")
 PROMPT_LENGTH = int(os.getenv("BITNET_PROMPT_LENGTH", "256"))
 MAX_TOKENS = int(os.getenv("BITNET_MAX_TOKENS", "2048"))
-DEFAULT_TEMPERATURE = float(os.getenv("BITNET_TEMPERATURE", "0.7"))
-DEFAULT_TOP_P = float(os.getenv("BITNET_TOP_P", "0.95"))
-DEFAULT_SYSTEM_PROMPT = os.getenv("BITNET_SYSTEM_PROMPT", "You are a helpful assistant.")
+DEFAULT_TEMPERATURE = float(os.getenv("BITNET_TEMPERATURE", "0.2"))
+DEFAULT_TOP_P = float(os.getenv("BITNET_TOP_P", "0.9"))
+DEFAULT_SYSTEM_PROMPT = os.getenv(
+    "BITNET_SYSTEM_PROMPT",
+    "You are a concise, accurate assistant. Stay on topic and stop when the answer is complete.",
+)
 
 g = None
 
@@ -341,8 +344,8 @@ class ChatMessage(BaseModel):
 class ChatCompletionRequest(BaseModel):
     model: str = "bitnet"
     messages: List[ChatMessage]
-    temperature: Optional[float] = 0.7
-    top_p: Optional[float] = 0.95
+    temperature: Optional[float] = DEFAULT_TEMPERATURE
+    top_p: Optional[float] = DEFAULT_TOP_P
     max_tokens: Optional[int] = 512
     stream: Optional[bool] = False
 
