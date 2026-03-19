@@ -47,6 +47,7 @@ python setup_env.py --hf-repo tiiuae/Falcon3-10B-Instruct-1.58bit --quant-type t
 The GPU runtime does not ship checkpoints or compiled CUDA binaries. Prepare a checkpoint directory that contains `model_state_fp16.pt` and `model_state_int2.pt`, then build `src/cuda/bitnet_kernels/libbitnet.dll` locally with `src/cuda/bitnet_kernels/compile.bat`.
 The examples below assume you place those artifacts under `models/gpu/bitnet-b1.58-2B-4T-bf16`.
 The default GPU decode backend is `int2`, which uses the packed CUDA kernel. If you need a slower reference fallback for debugging, switch to `--decode_backend=fp16`.
+Upstream BitNet also uses `xformers` attention for its fastest Linux/A100 path. On Windows this is optional and only works if your `xformers` wheel matches the exact local PyTorch, CUDA, and Python build.
 
 ## Quick Start
 
@@ -133,6 +134,7 @@ cd src/cuda/bitnet_kernels
 - `gpu_generate.py --interactive=True` keeps the Python process alive until you exit the prompt or press `Ctrl+C`.
 - `gpu_server.py` serves a browser UI at `/`, API docs at `/docs`, and an OpenAI-style chat route at `/v1/chat/completions`.
 - Seeing one active model process is normal. Seeing multiple `llama-cli.exe` or `llama-server.exe` entries usually means you started more than one session or left an older server open.
+- The GPU path now stops cleanly on both `<|eot_id|>` and `<|end_of_text|>`, which improves browser/API chat termination and reduces repetitive trailing output.
 
 To inspect or clean up lingering CPU runtime processes on Windows:
 

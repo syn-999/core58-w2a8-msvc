@@ -297,7 +297,12 @@ class FastGen:
         torch.cuda.synchronize()
         stats.phase("decode" if use_cuda_graphs else "total")
 
-        eos_id = self.tokenizer.eos_id
+        stop_tokens = set(getattr(self.tokenizer, "stop_tokens", {self.tokenizer.eos_id}))
+        stop_token_ids = torch.tensor(
+            sorted(stop_tokens),
+            device=next_token.device,
+            dtype=next_token.dtype,
+        )
         for niter in range(1, gen_length):
             kv_seqlen.add_(kv_seqlen < max_seq_length)
             output = self._generate_compile_model(next_token.unsqueeze(1).int(), kv_seqlen)
@@ -314,7 +319,7 @@ class FastGen:
             out_tokens[niter, :] = next_token
             generated_tokens = niter + 1
 
-            if next_token.eq(eos_id).any():
+            if next_token.unsqueeze(-1).eq(stop_token_ids).any():
                 break
 
         torch.cuda.synchronize()
@@ -324,11 +329,10 @@ class FastGen:
             # print(prompt, tokens)
             """Trim the answer to end it on an eos token."""
             tokens = tokens[: max_seq_length - prompt_len]
-            eos_id = self.tokenizer.eos_id
-            if eos_id in tokens:
-                return tokens[: tokens.index(eos_id) + 1]
-            else:
-                return tokens
+            for i, token in enumerate(tokens):
+                if token in stop_tokens:
+                    return tokens[:i]
+            return tokens
 
         answers = [
             trim_answer(prompt_len, answer)

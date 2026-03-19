@@ -198,13 +198,15 @@ class ChatFormat:
     def __init__(self, tokenizer: Tokenizer):
         self.tokenizer = tokenizer
         self.eos_id = tokenizer.special_tokens["<|end_of_text|>"]
+        self.stop_tokens = set(tokenizer.stop_tokens)
     
     def decode(self, tokens: List[int]) -> str:
         # Decode the tokens to a string.
         decoded_str = self.tokenizer.decode(tokens)
         # Remove the special tokens from the decoded string.
         decoded_str = decoded_str.replace("<|eot_id|>", "")
-        return decoded_str
+        decoded_str = decoded_str.replace("<|end_of_text|>", "")
+        return decoded_str.strip()
 
     def encode_header(self, message: Message) -> List[int]:
         tokens = []
