@@ -75,7 +75,7 @@ INDEX_HTML = """<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BitNet GPU Chat</title>
+  <title>core58 GPU Chat</title>
   <style>
     :root {
       color-scheme: light;
@@ -208,7 +208,7 @@ INDEX_HTML = """<!doctype html>
 <body>
   <main>
     <section class="panel hero">
-      <h1>BitNet GPU Chat</h1>
+      <h1>core58 GPU Chat</h1>
       <p>Local browser chat for the Windows-native GPU runtime. This UI calls <code>/v1/chat/completions</code> on the same FastAPI server.</p>
     </section>
     <section class="grid">
@@ -282,7 +282,7 @@ INDEX_HTML = """<!doctype html>
       }
       dialog.push(...messages);
       return {
-        model: 'bitnet',
+        model: 'core58-gpu',
         messages: dialog,
         temperature: Number(temperature.value),
         top_p: Number(topP.value),
@@ -342,7 +342,7 @@ class ChatMessage(BaseModel):
     content: str
 
 class ChatCompletionRequest(BaseModel):
-    model: str = "bitnet"
+    model: str = "core58-gpu"
     messages: List[ChatMessage]
     temperature: Optional[float] = DEFAULT_TEMPERATURE
     top_p: Optional[float] = DEFAULT_TOP_P
