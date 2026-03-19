@@ -24,7 +24,7 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-Use the activated repo venv for the Python commands below. The CPU wrappers can sometimes work with a global Python, but the GPU entrypoints expect the repo environment with `torch`, `fire`, `fastapi`, and `uvicorn` installed.
+Use the activated repo venv for the Python commands below. The examples are written from the repository root to avoid `cd`/relative-path mistakes. The CPU wrappers can sometimes work with a global Python, but the GPU entrypoints expect the repo environment with `torch`, `fire`, `fastapi`, and `uvicorn` installed.
 
 The `3rdparty/llama.cpp` submodule is pinned intentionally through [`.gitmodules`](./.gitmodules). Treat that fork and revision as part of the build surface unless you are deliberately revalidating the Windows-native toolchain.
 
@@ -54,22 +54,19 @@ Most users only need the three commands below.
 **CPU terminal chat:**
 Starts an interactive conversation in the terminal with the Falcon GGUF model.
 ```bash
-cd inference
-python cpu_inference.py -m ../models/cpu/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf -p "You are a helpful assistant." -cnv -t 8 -c 4096 -n 512
+python inference/cpu_inference.py -m models/cpu/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf -p "You are a helpful assistant." -cnv -t 8 -c 4096 -n 512
 ```
 
 **CPU browser chat:**
 Starts the local `llama-server.exe` web UI on `http://127.0.0.1:8080`.
 ```bash
-cd inference
-python cpu_server.py -m ../models/cpu/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf -t 8 -c 4096 --host 127.0.0.1 --port 8080
+python inference/cpu_server.py -m models/cpu/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf -t 8 -c 4096 --host 127.0.0.1 --port 8080
 ```
 
 **GPU terminal chat:**
-Runs the Windows-native CUDA path from the repo venv.
+Runs the Windows-native CUDA path from the activated repo venv.
 ```bash
-cd inference
-..\venv\Scripts\python.exe gpu_generate.py ..\models\gpu\bitnet-b1.58-2B-4T-bf16 --interactive=True --chat_format=True --sampling=True --max_new_tokens=256
+python inference/gpu_generate.py models/gpu/bitnet-b1.58-2B-4T-bf16 --interactive=True --chat_format=True --sampling=True --max_new_tokens=256
 ```
 
 ## Additional Commands
@@ -77,22 +74,19 @@ cd inference
 **CPU one-shot generation:**
 Routes directly via the C++ `llama-cli.exe` engine.
 ```bash
-cd inference
-python cpu_inference.py -m ../models/cpu/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf -p "A complete structural breakdown of a cell is" -n 200
+python inference/cpu_inference.py -m models/cpu/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf -p "A complete structural breakdown of a cell is" -n 200
 ```
 
 **CPU interactive chat server:**
 Launches the local `llama-server.exe` web UI. The wrapper resolves the common Falcon model filename even if your local `models/cpu` tree is nested one level deeper.
 ```bash
-cd inference
-python cpu_server.py -m ../models/cpu/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf -t 8 -c 4096 --host 127.0.0.1 --port 8080
+python inference/cpu_server.py -m models/cpu/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf -t 8 -c 4096 --host 127.0.0.1 --port 8080
 ```
 
 **GPU execution:**
-Routes via the native PyTorch/NVCC wrapper. Run this from the repo venv. If you keep separate environments, replace `..\venv\Scripts\python.exe` with `..\venv_gpu\Scripts\python.exe`.
+Routes via the native PyTorch/NVCC wrapper from the activated repo venv. If you keep separate local environments instead of the single `venv` shown above, use your GPU-specific interpreter such as `venv_gpu\Scripts\python.exe`.
 ```bash
-cd inference
-..\venv\Scripts\python.exe gpu_generate.py ..\models\gpu\bitnet-b1.58-2B-4T-bf16 --interactive=True --chat_format=True --sampling=True --max_new_tokens=256
+python inference/gpu_generate.py models/gpu/bitnet-b1.58-2B-4T-bf16 --interactive=True --chat_format=True --sampling=True --max_new_tokens=256
 ```
 
 **Preparing a New GPU Checkpoint:**
