@@ -64,8 +64,8 @@ SUPPORTED_QUANT_TYPES = {
 }
 
 COMPILER_EXTRA_ARGS = {
-    "arm64": ["-DBITNET_ARM_TL1=OFF"],
-    "x86_64": ["-DBITNET_X86_TL2=OFF"]
+    "arm64": ["-DBITNET_ARM_TL1=OFF", "-DLLAMA_BUILD_EXAMPLES=OFF", "-DLLAMA_BUILD_TESTS=OFF", "-DLLAMA_BUILD_SERVER=OFF", "-DGGML_OPENMP=OFF"],
+    "x86_64": ["-DBITNET_X86_TL2=OFF", "-DLLAMA_BUILD_EXAMPLES=OFF", "-DLLAMA_BUILD_TESTS=OFF", "-DLLAMA_BUILD_SERVER=OFF", "-DGGML_OPENMP=OFF"]
 }
 
 OS_EXTRA_ARGS = {
@@ -117,7 +117,8 @@ def prepare_model():
         model_dir = os.path.join(model_dir, SUPPORTED_HF_MODELS[hf_url]["model_name"])
         Path(model_dir).mkdir(parents=True, exist_ok=True)
         logging.info(f"Downloading model {hf_url} from HuggingFace to {model_dir}...")
-        run_command(["huggingface-cli", "download", hf_url, "--local-dir", model_dir], log_step="download_model")
+        import huggingface_hub
+        huggingface_hub.snapshot_download(repo_id=hf_url, local_dir=model_dir, local_dir_use_symlinks=False)
     elif not os.path.exists(model_dir):
         logging.error(f"Model directory {model_dir} does not exist.")
         sys.exit(1)
@@ -127,10 +128,10 @@ def prepare_model():
     if not os.path.exists(gguf_path) or os.path.getsize(gguf_path) == 0:
         logging.info(f"Converting HF model to GGUF format...")
         if quant_type.startswith("tl"):
-            run_command([sys.executable, "utils/convert-hf-to-gguf-bitnet.py", model_dir, "--outtype", quant_type, "--quant-embd"], log_step="convert_to_tl")
+            run_command([sys.executable, "utils/cpu/convert-hf-to-gguf-bitnet.py", model_dir, "--outtype", quant_type, "--quant-embd"], log_step="convert_to_tl")
         else: # i2s
             # convert to f32
-            run_command([sys.executable, "utils/convert-hf-to-gguf-bitnet.py", model_dir, "--outtype", "f32"], log_step="convert_to_f32_gguf")
+            run_command([sys.executable, "utils/cpu/convert-hf-to-gguf-bitnet.py", model_dir, "--outtype", "f32", "--use-temp-file"], log_step="convert_to_f32_gguf")
             f32_model = os.path.join(model_dir, "ggml-model-f32.gguf")
             i2s_model = os.path.join(model_dir, "ggml-model-i2_s.gguf")
             # quantize to i2s
@@ -141,9 +142,9 @@ def prepare_model():
                     run_command(["./build/bin/llama-quantize", f32_model, i2s_model, "I2_S", "1"], log_step="quantize_to_i2s")
             else:
                 if quant_embd:
-                    run_command(["./build/bin/Release/llama-quantize", "--token-embedding-type", "f16", f32_model, i2s_model, "I2_S", "1", "1"], log_step="quantize_to_i2s")
+                    run_command(["./build/bin/Release/llama-quantize.exe", "--token-embedding-type", "f16", f32_model, i2s_model, "I2_S", "1", "1"], log_step="quantize_to_i2s")
                 else:
-                    run_command(["./build/bin/Release/llama-quantize", f32_model, i2s_model, "I2_S", "1"], log_step="quantize_to_i2s")
+                    run_command(["./build/bin/Release/llama-quantize.exe", f32_model, i2s_model, "I2_S", "1"], log_step="quantize_to_i2s")
 
         logging.info(f"GGUF model saved at {gguf_path}")
     else:
@@ -171,13 +172,13 @@ def gen_code():
                 shutil.copyfile(os.path.join(pretuned_kernels, "bitnet-lut-kernels-tl2.h"), "include/bitnet-lut-kernels.h")
                 shutil.copyfile(os.path.join(pretuned_kernels, "kernel_config_tl2.ini"), "include/kernel_config.ini")
         if get_model_name() == "bitnet_b1_58-large":
-            run_command([sys.executable, "utils/codegen_tl1.py", "--model", "bitnet_b1_58-large", "--BM", "256,128,256", "--BK", "128,64,128", "--bm", "32,64,32"], log_step="codegen")
+            run_command([sys.executable, "utils/cpu/codegen_tl1.py", "--model", "bitnet_b1_58-large", "--BM", "256,128,256", "--BK", "128,64,128", "--bm", "32,64,32"], log_step="codegen")
         elif get_model_name() in llama3_f3_models:
-            run_command([sys.executable, "utils/codegen_tl1.py", "--model", "Llama3-8B-1.58-100B-tokens", "--BM", "256,128,256,128", "--BK", "128,64,128,64", "--bm", "32,64,32,64"], log_step="codegen")
+            run_command([sys.executable, "utils/cpu/codegen_tl1.py", "--model", "Llama3-8B-1.58-100B-tokens", "--BM", "256,128,256,128", "--BK", "128,64,128,64", "--bm", "32,64,32,64"], log_step="codegen")
         elif get_model_name() == "bitnet_b1_58-3B":
-            run_command([sys.executable, "utils/codegen_tl1.py", "--model", "bitnet_b1_58-3B", "--BM", "160,320,320", "--BK", "64,128,64", "--bm", "32,64,32"], log_step="codegen")
+            run_command([sys.executable, "utils/cpu/codegen_tl1.py", "--model", "bitnet_b1_58-3B", "--BM", "160,320,320", "--BK", "64,128,64", "--bm", "32,64,32"], log_step="codegen")
         elif get_model_name() == "BitNet-b1.58-2B-4T":
-            run_command([sys.executable, "utils/codegen_tl1.py", "--model", "bitnet_b1_58-3B", "--BM", "160,320,320", "--BK", "64,128,64", "--bm", "32,64,32"], log_step="codegen")
+            run_command([sys.executable, "utils/cpu/codegen_tl1.py", "--model", "bitnet_b1_58-3B", "--BM", "160,320,320", "--BK", "64,128,64", "--bm", "32,64,32"], log_step="codegen")
         else:
             raise NotImplementedError()
     else:
@@ -189,13 +190,13 @@ def gen_code():
                 sys.exit(1)
             shutil.copyfile(os.path.join(pretuned_kernels, "bitnet-lut-kernels-tl2.h"), "include/bitnet-lut-kernels.h")
         if get_model_name() == "bitnet_b1_58-large":
-            run_command([sys.executable, "utils/codegen_tl2.py", "--model", "bitnet_b1_58-large", "--BM", "256,128,256", "--BK", "96,192,96", "--bm", "32,32,32"], log_step="codegen")
+            run_command([sys.executable, "utils/cpu/codegen_tl2.py", "--model", "bitnet_b1_58-large", "--BM", "256,128,256", "--BK", "96,192,96", "--bm", "32,32,32"], log_step="codegen")
         elif get_model_name() in llama3_f3_models:
-            run_command([sys.executable, "utils/codegen_tl2.py", "--model", "Llama3-8B-1.58-100B-tokens", "--BM", "256,128,256,128", "--BK", "96,96,96,96", "--bm", "32,32,32,32"], log_step="codegen")
+            run_command([sys.executable, "utils/cpu/codegen_tl2.py", "--model", "Llama3-8B-1.58-100B-tokens", "--BM", "256,128,256,128", "--BK", "96,96,96,96", "--bm", "32,32,32,32"], log_step="codegen")
         elif get_model_name() == "bitnet_b1_58-3B":
-            run_command([sys.executable, "utils/codegen_tl2.py", "--model", "bitnet_b1_58-3B", "--BM", "160,320,320", "--BK", "96,96,96", "--bm", "32,32,32"], log_step="codegen")
+            run_command([sys.executable, "utils/cpu/codegen_tl2.py", "--model", "bitnet_b1_58-3B", "--BM", "160,320,320", "--BK", "96,96,96", "--bm", "32,32,32"], log_step="codegen")
         elif get_model_name() == "BitNet-b1.58-2B-4T":
-            run_command([sys.executable, "utils/codegen_tl2.py", "--model", "bitnet_b1_58-3B", "--BM", "160,320,320", "--BK", "96,96,96", "--bm", "32,32,32"], log_step="codegen")    
+            run_command([sys.executable, "utils/cpu/codegen_tl2.py", "--model", "bitnet_b1_58-3B", "--BM", "160,320,320", "--BK", "96,96,96", "--bm", "32,32,32"], log_step="codegen")    
         else:
             raise NotImplementedError()
 
@@ -225,7 +226,7 @@ def parse_args():
     _, arch = system_info()
     parser = argparse.ArgumentParser(description='Setup the environment for running the inference')
     parser.add_argument("--hf-repo", "-hr", type=str, help="Model used for inference", choices=SUPPORTED_HF_MODELS.keys())
-    parser.add_argument("--model-dir", "-md", type=str, help="Directory to save/load the model", default="models")
+    parser.add_argument("--model-dir", "-md", type=str, help="Directory to save/load the model", default="models/cpu")
     parser.add_argument("--log-dir", "-ld", type=str, help="Directory to save the logging info", default="logs")
     parser.add_argument("--quant-type", "-q", type=str, help="Quantization type", choices=SUPPORTED_QUANT_TYPES[arch], default="i2_s")
     parser.add_argument("--quant-embd", action="store_true", help="Quantize the embeddings to f16")
