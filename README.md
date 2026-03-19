@@ -52,7 +52,7 @@ If you want to validate that stack explicitly, run `python scripts/check_gpu_env
 
 ## Quick Start
 
-Most users only need the three commands below.
+Most users only need one of the launch commands below.
 
 **CPU terminal chat:**
 Starts an interactive conversation in the terminal with the Falcon GGUF model.
@@ -74,7 +74,7 @@ python inference/gpu_generate.py models/gpu/bitnet-b1.58-2B-4T-bf16 --interactiv
 
 **GPU browser chat:**
 Starts a simple local browser UI backed by the FastAPI/OpenAI-compatible GPU server on `http://127.0.0.1:8000`.
-The prompt budget below is the tested long-form setting that kept browser/API responses coherent without changing the code defaults globally.
+The prompt budget below is a practical long-form setting for browser and API use.
 ```powershell
 $env:BITNET_CKPT_DIR = "models/gpu/bitnet-b1.58-2B-4T-bf16"
 $env:BITNET_PROMPT_LENGTH = "512"
@@ -82,7 +82,7 @@ $env:BITNET_MAX_TOKENS = "768"
 python inference/gpu_server.py
 ```
 
-## Additional Commands
+## Reference Commands
 
 **CPU one-shot generation:**
 Routes directly via the C++ `llama-cli.exe` engine.
@@ -112,7 +112,7 @@ python inference/gpu_server.py
 ```
 
 **GPU server tuning:**
-The server defaults to a larger prompt budget than the CLI. Increase these before startup if you want longer conversations or larger generations.
+Adjust these before startup if you want a larger prompt budget, longer generations, or stricter sampling.
 ```powershell
 $env:BITNET_PROMPT_LENGTH = "512"
 $env:BITNET_MAX_TOKENS = "1024"
@@ -120,12 +120,6 @@ $env:BITNET_TEMPERATURE = "0.2"
 $env:BITNET_TOP_P = "0.9"
 python inference/gpu_server.py
 ```
-
-**Recommended browser capability test prompts:**
-- CPU browser: `Explain quantum entanglement with one analogy and one real-world use case.`
-- CPU browser follow-up: `Now summarize that in three bullet points.`
-- GPU browser: `Write a concise but detailed explanation of how quantum entanglement works, with one practical analogy and one real-world use case.`
-- GPU browser follow-up: `Now give me a shorter version in four sentences.`
 
 **Reference BF16 decode:**
 Uses the slower BF16 fallback path instead of the packed CUDA kernel.
