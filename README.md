@@ -26,6 +26,8 @@ pip install -r requirements.txt
 
 Use the activated repo venv for the Python commands below. The CPU wrappers can sometimes work with a global Python, but the GPU entrypoints expect the repo environment with `torch`, `fire`, `fastapi`, and `uvicorn` installed.
 
+The `3rdparty/llama.cpp` submodule is pinned intentionally through [`.gitmodules`](./.gitmodules). Treat that fork and revision as part of the build surface unless you are deliberately revalidating the Windows-native toolchain.
+
 ## Setup & Compilation
 
 The environment script automates the CPU download, conversion, and native compilation process.
@@ -45,23 +47,48 @@ python setup_env.py --hf-repo tiiuae/Falcon3-10B-Instruct-1.58bit --quant-type t
 The GPU runtime does not ship checkpoints or compiled CUDA binaries. Prepare a checkpoint directory that contains `model_state_fp16.pt` and `model_state_int2.pt`, then build `src/cuda/bitnet_kernels/libbitnet.dll` locally with `src/cuda/bitnet_kernels/compile.bat`.
 The examples below assume you place those artifacts under `models/gpu/bitnet-b1.58-2B-4T-bf16`.
 
-## Inference
+## Quick Start
 
-**CPU Execution:**
+Most users only need the three commands below.
+
+**CPU terminal chat:**
+Starts an interactive conversation in the terminal with the Falcon GGUF model.
+```bash
+cd inference
+python cpu_inference.py -m ../models/cpu/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf -p "You are a helpful assistant." -cnv -t 8 -c 4096 -n 512
+```
+
+**CPU browser chat:**
+Starts the local `llama-server.exe` web UI on `http://127.0.0.1:8080`.
+```bash
+cd inference
+python cpu_server.py -m ../models/cpu/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf -t 8 -c 4096 --host 127.0.0.1 --port 8080
+```
+
+**GPU terminal chat:**
+Runs the Windows-native CUDA path from the repo venv.
+```bash
+cd inference
+..\venv\Scripts\python.exe gpu_generate.py ..\models\gpu\bitnet-b1.58-2B-4T-bf16 --interactive=True --chat_format=True --sampling=True --max_new_tokens=256
+```
+
+## Additional Commands
+
+**CPU one-shot generation:**
 Routes directly via the C++ `llama-cli.exe` engine.
 ```bash
 cd inference
 python cpu_inference.py -m ../models/cpu/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf -p "A complete structural breakdown of a cell is" -n 200
 ```
 
-**CPU Interactive Chat Server:**
+**CPU interactive chat server:**
 Launches the local `llama-server.exe` web UI. The wrapper resolves the common Falcon model filename even if your local `models/cpu` tree is nested one level deeper.
 ```bash
 cd inference
 python cpu_server.py -m ../models/cpu/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf -t 8 -c 4096 --host 127.0.0.1 --port 8080
 ```
 
-**GPU Execution:**
+**GPU execution:**
 Routes via the native PyTorch/NVCC wrapper. Run this from the repo venv. If you keep separate environments, replace `..\venv\Scripts\python.exe` with `..\venv_gpu\Scripts\python.exe`.
 ```bash
 cd inference
@@ -74,6 +101,20 @@ python utils/gpu/convert_safetensors.py --safetensors_file models/gpu/bitnet-b1.
 python utils/gpu/convert_checkpoint.py --input models/gpu/bitnet-b1.58-2B-4T-bf16/model_state.pt
 cd src/cuda/bitnet_kernels
 .\compile.bat
+```
+
+## Runtime Notes
+
+- `cpu_inference.py` exits when generation finishes. With `-cnv`, it remains attached to your terminal session until you stop it.
+- `cpu_server.py` keeps a `llama-server.exe` process running until you press `Ctrl+C`.
+- `gpu_generate.py --interactive=True` keeps the Python process alive until you exit the prompt or press `Ctrl+C`.
+- Seeing one active model process is normal. Seeing multiple `llama-cli.exe` or `llama-server.exe` entries usually means you started more than one session or left an older server open.
+
+To inspect or clean up lingering CPU runtime processes on Windows:
+
+```powershell
+Get-Process llama* -ErrorAction SilentlyContinue
+Stop-Process -Name llama-cli,llama-server -Force
 ```
 
 ## Smoke Test
@@ -89,3 +130,7 @@ To also verify the local CUDA helper build:
 ```powershell
 .\scripts\smoke_test.ps1 -CheckGpu
 ```
+
+## License
+
+This project is released under the MIT License. It includes work derived from Microsoft BitNet and `llama.cpp`; see [`LICENSE`](./LICENSE).

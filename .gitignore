@@ -13,11 +13,14 @@
 *.gcov
 *.gguf
 *.gguf.json
+*.ilk
 *.lib
 *.lastModified
 *.log
 *.metallib
 *.o
+*.obj
+*.pdb
 *.so
 *.tmp
 !src/cuda/bitnet_kernels/compile.bat
@@ -33,6 +36,7 @@
 .swiftpm
 .vs/
 .vscode/
+Thumbs.db
 nppBackup
 
 # Models
@@ -46,6 +50,9 @@ gpu/checkpoints/*
 /venv_cpu
 /venv_gpu
 __pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 */poetry.lock
 poetry.toml
 
