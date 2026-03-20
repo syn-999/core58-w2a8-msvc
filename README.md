@@ -209,11 +209,13 @@ Stop-Process -Name llama-cli,llama-server -Force
 
 ## Smoke Test
 
-Quick Windows release check:
+Quick Windows release check. This is a clean rebuild of the CPU wrapper binaries, not a sub-second smoke probe:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke_test.ps1
 ```
+
+On a normal Windows dev box, expect this to take a few minutes.
 
 Also verify the local CUDA helper build:
 
@@ -221,11 +223,42 @@ Also verify the local CUDA helper build:
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke_test.ps1 -CheckGpu
 ```
 
+If you run the GPU variant, stop any live `gpu_generate.py` or `gpu_server.py` session first so `libbitnet.dll` is not locked.
+
+If you want the smoke test output to refresh the runtime binaries under `build\bin\Release` for packaging, keep the build directory:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke_test.ps1 -BuildDir build -KeepBuildDir
+```
+
 Low-level CUDA kernel self-test:
 
 ```powershell
 .\venv_gpu\Scripts\python.exe .\scripts\gpu_kernel_selftest.py
 ```
+
+## Release Packaging
+
+After you have a validated `build\bin\Release` directory, create a publishable zip with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\package_release.ps1
+```
+
+The packaging script expects a clean git working tree by default so the archive name matches the commit it contains.
+
+That archive contains:
+- tracked source files, including the pinned `llama.cpp` submodule contents
+- `build\bin\Release\llama-cli.exe`
+- `build\bin\Release\llama-server.exe`
+- the required `ggml.dll` and `llama.dll`
+- `src\cuda\bitnet_kernels\libbitnet.dll` if it exists locally
+
+It intentionally excludes:
+- local model weights
+- virtual environments
+- `.git` metadata
+- transient build, profile, and log artifacts
 
 ## License
 

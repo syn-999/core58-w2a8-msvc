@@ -130,6 +130,8 @@ class FastGen:
         self.tokenizer = tokenizer
         self._prefill_cuda_graph, self._prefill_compile_model, self._prefill_inputs, self._prefill_logits = None, None, None, None
         self._generate_cuda_graph, self._generate_compile_model, self._generate_inputs, self._generate_logits = None, None, None, None
+        self._generate_token_buffer = None
+        self._generate_seq_lens_buffer = None
         self._cache = None
         start_time = time.time()
         self._prefill_compile_model = self.compile_prefill()
@@ -199,6 +201,8 @@ class FastGen:
         tokens = torch.IntTensor([[1] for _ in range(self.gen_args.gen_bsz)]).cuda()
         seq_lens = torch.IntTensor([self.gen_args.prompt_length for _ in range(self.gen_args.gen_bsz)]).cuda()
         self._generate_inputs = (tokens, seq_lens)
+        self._generate_token_buffer = self._generate_inputs[0].view(-1)
+        self._generate_seq_lens_buffer = self._generate_inputs[1]
 
         s = torch.cuda.Stream()
         s.wait_stream(torch.cuda.current_stream())
@@ -224,9 +228,11 @@ class FastGen:
                 cache=self._cache,
             )
 
-        def replay(tokens, seq_lens):
-            self._generate_inputs[0].copy_(tokens)
-            self._generate_inputs[1].copy_(seq_lens)
+        def replay(tokens=None, seq_lens=None):
+            if tokens is not None:
+                self._generate_inputs[0].copy_(tokens)
+            if seq_lens is not None:
+                self._generate_inputs[1].copy_(seq_lens)
 
             self._generate_cuda_graph.replay()
 
@@ -278,7 +284,12 @@ class FastGen:
         kv_seqlen = torch.tensor(prompt_lens, dtype=torch.int32, device="cuda")
         prompts = [prompt + [1] * (self.gen_args.prompt_length - len(prompt)) for prompt in prompts]
         tokens = torch.IntTensor(prompts).cuda()
-        out_tokens = torch.zeros((gen_length, bs), dtype=torch.int)
+        single_sequence = bs == 1
+        out_tokens = torch.empty(
+            gen_length if single_sequence else (gen_length, bs),
+            dtype=torch.long,
+            device="cuda",
+        )
 
         stats = Stats()
         torch.cuda.synchronize()
@@ -297,7 +308,10 @@ class FastGen:
             next_token = torch.argmax(logits, dim=-1)        
 
         next_token = next_token.reshape(bs)
-        out_tokens[0, :] = next_token
+        if single_sequence:
+            out_tokens[0] = next_token[0]
+        else:
+            out_tokens[0, :] = next_token
 
         torch.cuda.synchronize()
         stats.phase("decode" if use_cuda_graphs else "total")
@@ -319,14 +333,23 @@ class FastGen:
             all_finished_host.copy_(all_finished_device, non_blocking=True)
             all_finished_event.record(torch.cuda.current_stream())
 
-        if bs == 1:
-            schedule_finished_poll(next_token.eq(stop_token_ids).any())
+        def token_is_stop(token_values: torch.Tensor) -> torch.Tensor:
+            if stop_token_ids.numel() == 1:
+                return token_values.eq(stop_token_ids[0])
+            return token_values.unsqueeze(-1).eq(stop_token_ids).any(dim=-1)
+
+        if single_sequence:
+            decode_token_buffer = self._generate_token_buffer
+            decode_seq_lens = self._generate_seq_lens_buffer
+            decode_seq_lens.fill_(prompt_lens[0])
+            schedule_finished_poll(token_is_stop(next_token))
             for niter in range(1, gen_length):
                 if all_finished_event.query() and bool(all_finished_host.item()):
                     break
 
-                kv_seqlen.add_(kv_seqlen < max_seq_length)
-                output = self._generate_compile_model(next_token.reshape(1, 1).int(), kv_seqlen)
+                decode_seq_lens.add_(decode_seq_lens < max_seq_length)
+                decode_token_buffer.copy_(next_token)
+                output = self._generate_compile_model()
 
                 logits = output.view(1, self.model_args.vocab_size)
 
@@ -337,13 +360,13 @@ class FastGen:
                     next_token = torch.argmax(logits, dim=-1)
 
                 next_token = next_token.reshape(1)
-                out_tokens[niter, 0] = next_token
+                out_tokens[niter] = next_token[0]
                 steps_written = niter + 1
                 if (steps_written % self.EARLY_STOP_POLL_INTERVAL) == 0:
-                    schedule_finished_poll(next_token.eq(stop_token_ids).any())
+                    schedule_finished_poll(token_is_stop(next_token))
         else:
             inactive_token = torch.full_like(next_token, self.tokenizer.eos_id)
-            finished = next_token.unsqueeze(-1).eq(stop_token_ids).any(dim=-1)
+            finished = token_is_stop(next_token)
             schedule_finished_poll(torch.all(finished))
             for niter in range(1, gen_length):
                 if all_finished_event.query() and bool(all_finished_host.item()):
@@ -358,7 +381,7 @@ class FastGen:
                     next_token,
                     inactive_token,
                 )
-                output = self._generate_compile_model(decode_input.unsqueeze(1).int(), kv_seqlen)
+                output = self._generate_compile_model(decode_input.unsqueeze(1), kv_seqlen)
 
                 logits = output.view(bs, self.model_args.vocab_size)
 
@@ -371,7 +394,7 @@ class FastGen:
                 next_token = next_token.reshape(bs)
                 next_token = torch.where(active, next_token, decode_input)
                 out_tokens[niter, :] = next_token
-                finished |= next_token.unsqueeze(-1).eq(stop_token_ids).any(dim=-1)
+                finished |= token_is_stop(next_token)
                 steps_written = niter + 1
                 if (steps_written % self.EARLY_STOP_POLL_INTERVAL) == 0:
                     schedule_finished_poll(torch.all(finished))
@@ -386,10 +409,13 @@ class FastGen:
                     return tokens[:i], i + 1
             return tokens, len(tokens)
 
-        answers = [
-            trim_answer(answer)
-            for answer in out_tokens[:steps_written, :].t().tolist()
-        ]
+        if single_sequence:
+            answers = [trim_answer(out_tokens[:steps_written].cpu().tolist())]
+        else:
+            answers = [
+                trim_answer(answer)
+                for answer in out_tokens[:steps_written, :].transpose(0, 1).cpu().tolist()
+            ]
         generated_tokens = sum(consumed_tokens for _, consumed_tokens in answers)
         stats.end_phase(tokens=generated_tokens)
         answers = [answer for answer, _ in answers]
