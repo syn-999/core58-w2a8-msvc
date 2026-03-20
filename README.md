@@ -10,6 +10,10 @@ Built on top of [Microsoft BitNet](https://github.com/microsoft/BitNet) and `lla
 
 Latest Windows package: [Releases](https://github.com/syn-999/core58-w2a8-msvc/releases/latest)
 
+![CPU terminal demo](./.github/cpu-demo.gif)
+
+CPU terminal on the left, live system activity on the right.
+
 ## Why This Repo
 
 - Windows-first packaging and release zips
