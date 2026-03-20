@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Support Guide
+    url: https://github.com/syn-999/core58-w2a8-msvc/blob/master/SUPPORT.md
+    about: Read the support guidance before opening an issue.
+  - name: Security Policy
+    url: https://github.com/syn-999/core58-w2a8-msvc/blob/master/SECURITY.md
+    about: Please do not file sensitive security issues publicly.

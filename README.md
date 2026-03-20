@@ -1,6 +1,22 @@
-# core58-w2a8-msvc
+# core58-w2a8-msvc: Windows-Native BitNet and Ternary LLM Inference
 
-A minimal Windows-native inference framework for 1.58-bit ternary LLMs.
+[![Release](https://img.shields.io/github/v/release/syn-999/core58-w2a8-msvc?display_name=tag)](https://github.com/syn-999/core58-w2a8-msvc/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+[![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue)](https://github.com/syn-999/core58-w2a8-msvc)
+
+`core58-w2a8-msvc` is an unofficial Windows-native inference framework for BitNet-style 1.58-bit and ternary LLMs. It combines a CPU GGUF path built on `llama.cpp` with a separate GPU runtime, terminal chat, browser chat, and release-ready packaging.
+
+Built on top of [Microsoft BitNet](https://github.com/microsoft/BitNet) and `llama.cpp`, this repo focuses on a practical Windows developer experience: reproducible builds, smoke-tested release artifacts, and clearly separated CPU and GPU paths.
+
+## Why This Repo
+
+- Windows-first packaging and release zips
+- CPU GGUF inference through `llama.cpp`
+- Separate experimental GPU runtime with packed `int2` decode
+- Terminal and browser chat entrypoints
+- Release-focused smoke test and packaging scripts
+
+## Scope
 
 The repo keeps the CPU and GPU paths separate on purpose:
 - the CPU path is the primary automated flow, built around `llama.cpp` and GGUF
@@ -271,3 +287,10 @@ It intentionally excludes:
 ## License
 
 This project is released under the MIT License. It includes work derived from Microsoft BitNet and `llama.cpp`; see [`LICENSE`](./LICENSE).
+
+## Community
+
+- See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for contribution and validation expectations.
+- See [`SUPPORT.md`](./SUPPORT.md) for support guidance.
+- See [`SECURITY.md`](./SECURITY.md) for security reporting expectations.
+- See [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) for participation standards.
