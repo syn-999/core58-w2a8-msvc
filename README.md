@@ -114,10 +114,18 @@ For the CPU examples below, replace the `-m` path if your GGUF lives somewhere e
 ### CPU terminal one-shot
 
 ```powershell
-.\venv_cpu\Scripts\python.exe .\inference\cpu_inference.py -m .\models\cpu\Falcon3-10B\Falcon3-10B-Instruct-1.58bit\ggml-model-i2_s.gguf -p "Explain the structure of a biological cell in one clear paragraph." -t 8 -c 4096 -temp 0.2 -n 192
+.\venv_cpu\Scripts\python.exe .\inference\cpu_inference.py -m .\models\cpu\Falcon3-10B\Falcon3-10B-Instruct-1.58bit\ggml-model-i2_s.gguf -p "Explain the structure of a biological cell in one clear paragraph." -t 8 -c 4096 -temp 0.2 -n 256
 ```
 
 This exits when the response finishes.
+
+### CPU terminal chat
+
+```powershell
+.\venv_cpu\Scripts\python.exe .\inference\cpu_inference.py -m .\models\cpu\Falcon3-10B\Falcon3-10B-Instruct-1.58bit\ggml-model-i2_s.gguf -cnv -t 8 -c 4096 -temp 0.2 -n 384
+```
+
+This stays in your terminal and waits for your first message.
 
 ### CPU browser chat
 
@@ -130,7 +138,7 @@ Open `http://127.0.0.1:8080`.
 ### GPU terminal chat
 
 ```powershell
-.\venv_gpu\Scripts\python.exe .\inference\gpu_generate.py .\models\gpu\bitnet-b1.58-2B-4T-bf16 --interactive=True --chat_format=True --prompt_length=1024 --max_new_tokens=256
+.\venv_gpu\Scripts\python.exe .\inference\gpu_generate.py .\models\gpu\bitnet-b1.58-2B-4T-bf16 --interactive=True --chat_format=True --prompt_length=1024 --max_new_tokens=512
 ```
 
 When `enter prompt:` appears, type a question such as `Name three basic parts of a biological cell in one sentence.` Add `--sampling=True` if you want less deterministic output.
@@ -202,6 +210,7 @@ cmd /c .\src\cuda\bitnet_kernels\compile.bat
 - The GPU browser route uses this repo's own FastAPI frontend and identifies as `core58 GPU Chat`. Its conversation state lives in page memory and resets on refresh or server restart.
 - The GPU backend truncates the oldest chat history if the conversation exceeds `BITNET_PROMPT_LENGTH`. This keeps the request alive, but if earlier instructions still matter, raise the limit or start a fresh session.
 - GPU benchmarking should be warmed once before you record throughput. Cold first runs can underreport tokens per second.
+- If replies are getting cut off, raise `-n` on the CPU path or `--max_new_tokens` / `BITNET_MAX_TOKENS` on the GPU path. The quick-start values aim for responsive demos, not maximum completion length.
 
 To inspect or clean up lingering CPU runtime processes on Windows:
 
