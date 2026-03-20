@@ -64,6 +64,7 @@ class GenArgs:
 
 class FastGen:
     GRAPH_WARMUPS: int = 1
+    EARLY_STOP_POLL_INTERVAL: int = 4
     tokenizer: Tokenizer
 
     @staticmethod
@@ -277,7 +278,7 @@ class FastGen:
         kv_seqlen = torch.tensor(prompt_lens, dtype=torch.int32, device="cuda")
         prompts = [prompt + [1] * (self.gen_args.prompt_length - len(prompt)) for prompt in prompts]
         tokens = torch.IntTensor(prompts).cuda()
-        out_tokens = torch.zeros((max_seq_length, bs), dtype=torch.int)
+        out_tokens = torch.zeros((gen_length, bs), dtype=torch.int)
 
         stats = Stats()
         torch.cuda.synchronize()
@@ -307,54 +308,91 @@ class FastGen:
             device=next_token.device,
             dtype=next_token.dtype,
         )
-        inactive_token = torch.full_like(next_token, self.tokenizer.eos_id)
-        finished = next_token.unsqueeze(-1).eq(stop_token_ids).any(dim=-1)
-        generated_tokens = bs
-        for niter in range(1, gen_length):
-            if bool(finished.all()):
-                break
+        all_finished_device = torch.empty((), device=next_token.device, dtype=torch.bool)
+        all_finished_host = torch.empty((), dtype=torch.bool, device="cpu", pin_memory=True)
+        all_finished_event = torch.cuda.Event()
+        steps_written = 1
 
-            active = ~finished
-            kv_seqlen.add_(
-                active.to(kv_seqlen.dtype) * (kv_seqlen < max_seq_length).to(kv_seqlen.dtype)
-            )
-            decode_input = torch.where(
-                active,
-                next_token,
-                inactive_token,
-            )
-            output = self._generate_compile_model(decode_input.unsqueeze(1).int(), kv_seqlen)
+        def schedule_finished_poll(token_status: torch.Tensor) -> None:
+            token_status = token_status.reshape(())
+            all_finished_device.copy_(token_status)
+            all_finished_host.copy_(all_finished_device, non_blocking=True)
+            all_finished_event.record(torch.cuda.current_stream())
 
-            logits = output.view(bs, self.model_args.vocab_size)
+        if bs == 1:
+            schedule_finished_poll(next_token.eq(stop_token_ids).any())
+            for niter in range(1, gen_length):
+                if all_finished_event.query() and bool(all_finished_host.item()):
+                    break
 
-            if use_sampling:
-                probs = torch.softmax(logits / max(temperature, 1e-5), dim=-1)
-                next_token = sample_utils.top_p(probs, top_p)
-            else:
-                next_token = torch.argmax(logits, dim=-1)
+                kv_seqlen.add_(kv_seqlen < max_seq_length)
+                output = self._generate_compile_model(next_token.reshape(1, 1).int(), kv_seqlen)
 
-            next_token = next_token.reshape(bs)
-            next_token = torch.where(active, next_token, decode_input)
-            out_tokens[niter, :] = next_token
-            generated_tokens += int(active.sum().item())
-            finished |= next_token.unsqueeze(-1).eq(stop_token_ids).any(dim=-1)
+                logits = output.view(1, self.model_args.vocab_size)
+
+                if use_sampling:
+                    probs = torch.softmax(logits / max(temperature, 1e-5), dim=-1)
+                    next_token = sample_utils.top_p(probs, top_p)
+                else:
+                    next_token = torch.argmax(logits, dim=-1)
+
+                next_token = next_token.reshape(1)
+                out_tokens[niter, 0] = next_token
+                steps_written = niter + 1
+                if (steps_written % self.EARLY_STOP_POLL_INTERVAL) == 0:
+                    schedule_finished_poll(next_token.eq(stop_token_ids).any())
+        else:
+            inactive_token = torch.full_like(next_token, self.tokenizer.eos_id)
+            finished = next_token.unsqueeze(-1).eq(stop_token_ids).any(dim=-1)
+            schedule_finished_poll(torch.all(finished))
+            for niter in range(1, gen_length):
+                if all_finished_event.query() and bool(all_finished_host.item()):
+                    break
+
+                active = ~finished
+                kv_seqlen.add_(
+                    active.to(kv_seqlen.dtype) * (kv_seqlen < max_seq_length).to(kv_seqlen.dtype)
+                )
+                decode_input = torch.where(
+                    active,
+                    next_token,
+                    inactive_token,
+                )
+                output = self._generate_compile_model(decode_input.unsqueeze(1).int(), kv_seqlen)
+
+                logits = output.view(bs, self.model_args.vocab_size)
+
+                if use_sampling:
+                    probs = torch.softmax(logits / max(temperature, 1e-5), dim=-1)
+                    next_token = sample_utils.top_p(probs, top_p)
+                else:
+                    next_token = torch.argmax(logits, dim=-1)
+
+                next_token = next_token.reshape(bs)
+                next_token = torch.where(active, next_token, decode_input)
+                out_tokens[niter, :] = next_token
+                finished |= next_token.unsqueeze(-1).eq(stop_token_ids).any(dim=-1)
+                steps_written = niter + 1
+                if (steps_written % self.EARLY_STOP_POLL_INTERVAL) == 0:
+                    schedule_finished_poll(torch.all(finished))
 
         torch.cuda.synchronize()
-        stats.end_phase(tokens=generated_tokens)
+        generated_tokens = 0
 
-        def trim_answer(prompt_len, tokens):
-            # print(prompt, tokens)
+        def trim_answer(tokens):
             """Trim the answer to end it on an eos token."""
-            tokens = tokens[: max_seq_length - prompt_len]
             for i, token in enumerate(tokens):
                 if token in stop_tokens:
-                    return tokens[:i]
-            return tokens
+                    return tokens[:i], i + 1
+            return tokens, len(tokens)
 
         answers = [
-            trim_answer(prompt_len, answer)
-            for prompt_len, answer in zip(prompt_lens, out_tokens.t().tolist())
+            trim_answer(answer)
+            for answer in out_tokens[:steps_written, :].t().tolist()
         ]
+        generated_tokens = sum(consumed_tokens for _, consumed_tokens in answers)
+        stats.end_phase(tokens=generated_tokens)
+        answers = [answer for answer, _ in answers]
         return stats, answers
 
 
