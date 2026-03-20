@@ -98,13 +98,14 @@ The examples below assume the GPU artifacts live under `models\gpu\bitnet-b1.58-
 The default GPU decode backend is `int2`. If you need a slower reference path for debugging, use `--decode_backend=fp16`.
 If `libbitnet.dll` or either checkpoint file is missing, the GPU entrypoints now fail with a direct path-level error instead of a raw loader exception.
 
-Optional `xformers` attention is not required for the current Windows runtime. If you want to validate that stack explicitly, run:
+Optional `xformers` attention is not required for the main Windows runtime. If you want to validate a local `xformers` install explicitly, run:
 
 ```powershell
 .\venv_gpu\Scripts\python.exe .\scripts\check_gpu_env.py
 ```
 
 A working `xformers` path requires the local CUDA toolkit version to match `torch.version.cuda`.
+That diagnostic is intentionally strict and returns a non-zero exit code when the optional `xformers` stack is unavailable or mismatched.
 
 ## Quick Start
 

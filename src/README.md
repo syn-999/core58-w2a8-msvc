@@ -99,14 +99,7 @@ Fine-tuning kernel parameters for optimal performance on specific hardware:
 - **Column Block Size:** [32, 64, 128, 256, 512, 1024]
 
 **Fine-tuning Results:**
-
-<div align="center">
-
-<img src="./assets/fine_tuning_result.png" alt="fine_tune_result" width="800"/>
-
-*Shows throughput (tokens/s) for various configurations.*
-
-</div>
+The original fine-tuning plot image is not bundled in this repo snapshot. The validated result from that sweep is the configuration noted below.
 
 **Optimal Configuration:** Under this setup (x86, 8 threads, pp128), the best performance is achieved with parallelism degree = 4, row block size = 4, and column block size = 128.
 
@@ -136,14 +129,7 @@ Test configuration: BitNet-b1.58-2B-4T, TG128
 </div>
 
 **Inference Speed Comparison:**
-
-<div align="center">
-
-<img src="./assets/embedding_throughput.png" alt="embedding_throughput" width="800"/>
-
-*Token generation throughput (tg128) for different embedding quantization types.*
-
-</div>
+The original embedding-throughput plot image is not bundled in this repo snapshot. The recommendation below is the retained result of that benchmark set.
 
 **Recommendation:** Based on comprehensive evaluation of memory footprint, perplexity preservation, and inference speed, **Q6_K** is selected as the optimal embedding quantization format.
 
@@ -157,12 +143,7 @@ Comparison of optimized parallel kernels vs. original implementation:
 - Threads: 1 / 2 / 4 / 8 / 12 / 16
 - Test: 128 prompt tokens (pp128) + 128 generated tokens (tg128)
 - Method: Activation Parallel
-
-<div align="center">
-
-<img src="./assets/performance_comparison_amd_epyc.png" alt="performance_comparison_amd_epyc" width="800"/>
-
-</div>
+The original AMD EPYC comparison plot is not bundled in this repo snapshot.
 
 **Test Configuration:**
 - Model: BitNet-b1.58-2B-4T
@@ -170,12 +151,7 @@ Comparison of optimized parallel kernels vs. original implementation:
 - Threads: 1 / 2 / 4 / 6
 - Test: 128 prompt tokens (pp128) + 128 generated tokens (tg128)
 - Method: Activation Parallel
-
-<div align="center">
-
-<img src="./assets/performance_comparison_i7-13800h.png" alt="performance_comparison_i7-13800h" width="800"/>
-
-</div>
+The original i7-13800H comparison plot is not bundled in this repo snapshot.
 
 **Test Configuration:**
 - Model: BitNet-b1.58-2B-4T
@@ -183,12 +159,7 @@ Comparison of optimized parallel kernels vs. original implementation:
 - Threads: 1 / 2 / 4 / 8
 - Test: 128 prompt tokens (pp128) + 128 generated tokens (tg128)
 - Method: Activation Parallel
-
-<div align="center">
-
-<img src="./assets/performance_comparison_cobalt100_dotprod.png" alt="performance_comparison_cobalt100_dotprod" width="800"/>
-
-</div>
+The original Cobalt 100 comparison plot is not bundled in this repo snapshot.
 
 ## Technical Details
 
