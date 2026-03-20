@@ -211,13 +211,13 @@ Stop-Process -Name llama-cli,llama-server -Force
 
 ## Smoke Test
 
-Quick Windows release check. This is a clean rebuild of the CPU wrapper binaries, not a sub-second smoke probe:
+Main Windows release check. This rebuilds the same `build\bin\Release` runtime that the packaging script consumes:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke_test.ps1
 ```
 
-On a normal Windows dev box, expect this to take a few minutes.
+On a normal Windows dev box, expect this to take a few minutes. By default the script now writes to `.\build` and preserves that directory so the next packaging step can use the exact same artifacts.
 
 Also verify the local CUDA helper build:
 
@@ -227,10 +227,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\smoke_test.ps1 -CheckGpu
 
 If you run the GPU variant, stop any live `gpu_generate.py` or `gpu_server.py` session first so `libbitnet.dll` is not locked.
 
-If you want the smoke test output to refresh the runtime binaries under `build\bin\Release` for packaging, keep the build directory:
+If you want a disposable scratch build instead of the release pipeline output, use a custom build directory and clean it up automatically:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke_test.ps1 -BuildDir build -KeepBuildDir
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke_test.ps1 -BuildDir .smoke-build -CleanBuildDir
 ```
 
 Low-level CUDA kernel self-test:
@@ -241,7 +241,7 @@ Low-level CUDA kernel self-test:
 
 ## Release Packaging
 
-After you have a validated `build\bin\Release` directory, create a publishable zip with:
+After `.\scripts\smoke_test.ps1` passes, create a publishable zip with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\package_release.ps1

@@ -143,7 +143,7 @@ def resolve_binary(name: str) -> str:
 
     print(
         f"Unable to find {name}. Build artifacts are missing under {build_dir}. "
-        f"Rebuild with `powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke_test.ps1 -BuildDir build -KeepBuildDir` from the repo root."
+        f"Rebuild with `powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke_test.ps1` from the repo root."
     )
     sys.exit(1)
 

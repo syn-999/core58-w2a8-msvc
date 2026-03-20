@@ -1,10 +1,15 @@
 param(
-    [string]$BuildDir = ".smoke-build",
+    [string]$BuildDir = "build",
     [switch]$CheckGpu,
-    [switch]$KeepBuildDir
+    [switch]$KeepBuildDir,
+    [switch]$CleanBuildDir
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($KeepBuildDir -and $CleanBuildDir) {
+    throw "Use either -KeepBuildDir or -CleanBuildDir, not both."
+}
 
 function Invoke-Step {
     param(
@@ -123,6 +128,15 @@ $ResolvedBuildDir = if ([System.IO.Path]::IsPathRooted($BuildDir)) {
 } else {
     Join-Path $RepoRoot $BuildDir
 }
+$ResolvedBuildDir = [System.IO.Path]::GetFullPath($ResolvedBuildDir)
+$DefaultBuildDir = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot "build"))
+$PreserveBuildDir = if ($KeepBuildDir) {
+    $true
+} elseif ($CleanBuildDir) {
+    $false
+} else {
+    $ResolvedBuildDir -eq $DefaultBuildDir
+}
 
 $CMakeCommand = Resolve-CMakeCommand -RepoRoot $RepoRoot
 $ClangToolchain = Resolve-ClangToolchain
@@ -191,7 +205,7 @@ try {
 }
 finally {
     Pop-Location
-    if ((-not $KeepBuildDir) -and (Test-Path $ResolvedBuildDir)) {
+    if ((-not $PreserveBuildDir) -and (Test-Path $ResolvedBuildDir)) {
         Remove-Item -Recurse -Force $ResolvedBuildDir
     }
 

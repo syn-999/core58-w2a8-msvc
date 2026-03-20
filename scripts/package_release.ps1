@@ -91,7 +91,7 @@ $ResolvedBuildDir = if ([System.IO.Path]::IsPathRooted($BuildDir)) {
 }
 
 if (-not (Test-Path $ResolvedBuildDir -PathType Container)) {
-    throw "Build directory not found: $ResolvedBuildDir. Rebuild with `powershell -ExecutionPolicy Bypass -File .\scripts\smoke_test.ps1 -BuildDir build -KeepBuildDir` first."
+    throw "Build directory not found: $ResolvedBuildDir. Rebuild with `powershell -ExecutionPolicy Bypass -File .\scripts\smoke_test.ps1` first."
 }
 
 if (-not $AllowDirty) {
