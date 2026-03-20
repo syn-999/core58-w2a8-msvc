@@ -79,7 +79,6 @@ INDEX_HTML = """<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>core58 GPU Chat</title>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     :root {
       color-scheme: light;
@@ -274,9 +273,13 @@ INDEX_HTML = """<!doctype html>
     function appendBubble(role, content) {
       const node = document.createElement('div');
       node.className = `msg ${role}`;
-      // Parse markdown and HTML natively rather than hardcoding edge cases
-      const parsedContent = typeof marked !== 'undefined' ? marked.parse(content, { breaks: true }) : content;
-      node.innerHTML = `<strong>${role[0].toUpperCase()}${role.slice(1)}:</strong><br/>${parsedContent}`;
+      const label = document.createElement('strong');
+      label.textContent = `${role[0].toUpperCase()}${role.slice(1)}:`;
+      const body = document.createElement('div');
+      body.textContent = content;
+      node.appendChild(label);
+      node.appendChild(document.createElement('br'));
+      node.appendChild(body);
       chatLog.appendChild(node);
     }
 
@@ -355,6 +358,18 @@ class ChatCompletionRequest(BaseModel):
     max_tokens: Optional[int] = 512
     stream: Optional[bool] = False
 
+def encode_completion_dialog(
+    tokenizer: ChatFormat,
+    message_token_groups: List[List[int]],
+    assistant_header: List[int],
+) -> List[int]:
+    bos_id = tokenizer.tokenizer.special_tokens["<|begin_of_text|>"]
+    tokens = [bos_id]
+    for message_tokens in message_token_groups:
+        tokens.extend(message_tokens)
+    tokens.extend(assistant_header)
+    return tokens
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     page = (
@@ -384,34 +399,35 @@ async def chat_completions(req: ChatCompletionRequest):
         raise HTTPException(status_code=503, detail="Model is not loaded yet")
 
     dialog = [{"role": m.role, "content": m.content} for m in req.messages]
+    assistant_header = g.tokenizer.encode_header({"role": "assistant", "content": ""})
+    dialog_tokens = [g.tokenizer.encode_message(message)[0] for message in dialog]
+    prompt_tokens = 1 + len(assistant_header) + sum(len(message_tokens) for message_tokens in dialog_tokens)
     while len(dialog) > 1:
-        tokens = [g.tokenizer.encode_dialog_prompt(dialog=dialog, completion=True)]
-        prompt_tokens = len(tokens[0])
         if prompt_tokens <= g.gen_args.prompt_length:
             break
         # Remove the oldest user/assistant pair or oldest message (keep system prompt if exists)
         if len(dialog) > 1 and dialog[0]["role"] == "system":
+            prompt_tokens -= len(dialog_tokens.pop(1))
             dialog.pop(1)
         else:
+            prompt_tokens -= len(dialog_tokens.pop(0))
             dialog.pop(0)
 
-    if len(dialog) <= 1:
-        tokens = [g.tokenizer.encode_dialog_prompt(dialog=dialog, completion=True)]
-        prompt_tokens = len(tokens[0])
-        if prompt_tokens > g.gen_args.prompt_length:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Prompt uses {prompt_tokens} tokens but this server is compiled for "
-                    f"{g.gen_args.prompt_length}. The single message is too large."
-                ),
-            )
+    if prompt_tokens > g.gen_args.prompt_length:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Prompt uses {prompt_tokens} tokens but this server is compiled for "
+                f"{g.gen_args.prompt_length}. The single message is too large."
+            ),
+        )
 
+    tokens = encode_completion_dialog(g.tokenizer, dialog_tokens, assistant_header)
     requested_max_tokens = req.max_tokens or 512
     max_new_tokens = min(requested_max_tokens, g.gen_args.gen_length)
 
     stats, out_tokens = g.generate_all(
-        tokens,
+        [tokens],
         use_cuda_graphs="NO_CUDA_GRAPHS" not in os.environ,
         use_sampling=(req.temperature or 0.0) > 0.0,
         max_new_tokens=max_new_tokens,

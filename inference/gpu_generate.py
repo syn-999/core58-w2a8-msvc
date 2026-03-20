@@ -180,8 +180,6 @@ class FastGen:
             #     self._prefill_inputs[1].k_seqinfo.seqlen.copy_(seq_lens)
 
             self._prefill_cuda_graph.replay()
-            torch.cuda.synchronize()
-
             return self._prefill_logits
 
         return replay
@@ -299,7 +297,6 @@ class FastGen:
 
         next_token = next_token.reshape(bs)
         out_tokens[0, :] = next_token
-        generated_tokens = 1
 
         torch.cuda.synchronize()
         stats.phase("decode" if use_cuda_graphs else "total")
@@ -310,9 +307,23 @@ class FastGen:
             device=next_token.device,
             dtype=next_token.dtype,
         )
+        inactive_token = torch.full_like(next_token, self.tokenizer.eos_id)
+        finished = next_token.unsqueeze(-1).eq(stop_token_ids).any(dim=-1)
+        generated_tokens = bs
         for niter in range(1, gen_length):
-            kv_seqlen.add_(kv_seqlen < max_seq_length)
-            output = self._generate_compile_model(next_token.unsqueeze(1).int(), kv_seqlen)
+            if bool(finished.all()):
+                break
+
+            active = ~finished
+            kv_seqlen.add_(
+                active.to(kv_seqlen.dtype) * (kv_seqlen < max_seq_length).to(kv_seqlen.dtype)
+            )
+            decode_input = torch.where(
+                active,
+                next_token,
+                inactive_token,
+            )
+            output = self._generate_compile_model(decode_input.unsqueeze(1).int(), kv_seqlen)
 
             logits = output.view(bs, self.model_args.vocab_size)
 
@@ -323,14 +334,13 @@ class FastGen:
                 next_token = torch.argmax(logits, dim=-1)
 
             next_token = next_token.reshape(bs)
+            next_token = torch.where(active, next_token, decode_input)
             out_tokens[niter, :] = next_token
-            generated_tokens = niter + 1
-
-            if next_token.unsqueeze(-1).eq(stop_token_ids).any():
-                break
+            generated_tokens += int(active.sum().item())
+            finished |= next_token.unsqueeze(-1).eq(stop_token_ids).any(dim=-1)
 
         torch.cuda.synchronize()
-        stats.end_phase(tokens=generated_tokens * bs)
+        stats.end_phase(tokens=generated_tokens)
 
         def trim_answer(prompt_len, tokens):
             # print(prompt, tokens)
